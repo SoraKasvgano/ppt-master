@@ -22,7 +22,7 @@ PPT Master 是一个 AI 驱动的多格式 SVG 内容生成系统，通过四角
 ```
 Strategist
     │
-    ├─ 图片方式 = "C) AI 生成"?
+    ├─ 图片方式包含「C) AI 生成」?
     │       │
     │       YES → Image_Generator → 图片归集到 images/
     │       │
@@ -48,7 +48,7 @@ Optimizer_CRAP (可选)
 | 阶段 | 必须阅读的文件 | 触发条件 |
 |------|---------------|----------|
 | 策略规划 | `roles/Strategist.md` | 用户提出新的PPT/内容生成需求 |
-| 图片生成 | `roles/Image_Generator.md` | 用户选择「C) AI 生成」图片方式 |
+| 图片生成 | `roles/Image_Generator.md` | 图片方式包含「C) AI 生成」（如 C、B+C、C+D） |
 | 通用风格执行 | `roles/Executor_General.md` | 用户选择「A) 通用灵活」设计风格 |
 | 咨询风格执行 | `roles/Executor_Consultant.md` | 用户选择「B) 一般咨询」设计风格 |
 | 顶级咨询执行 | `roles/Executor_Consultant_Top.md` | 用户选择「C) 顶级咨询」设计风格 |
@@ -206,6 +206,9 @@ Optimizer_CRAP (可选)
 ## 常用命令
 
 ```bash
+# PDF 转 Markdown（优先使用，本地快速）
+python3 tools/pdf_to_md.py <PDF文件>
+
 # 初始化项目
 python3 tools/project_manager.py init <名称> --format ppt169
 
@@ -252,6 +255,19 @@ project/
 - [ ] **重复**: 同类元素风格一致
 - [ ] **亲密性**: 相关内容空间聚合
 
+## PDF 转 Markdown 工具选择
+
+| 场景 | 推荐工具 | 命令 |
+|------|----------|------|
+| **原生 PDF**（Word/LaTeX 导出） | `pdf_to_md.py` | `python3 tools/pdf_to_md.py <文件>` |
+| **简单表格** | `pdf_to_md.py` | 同上 |
+| **隐私敏感文档** | `pdf_to_md.py` | 同上（数据不出本机） |
+| **扫描版/图片 PDF** | MinerU | 需要 OCR |
+| **复杂多栏排版** | MinerU | 版面分析更准 |
+| **数学公式** | MinerU | AI 识别能力强 |
+
+> **策略**: PyMuPDF 优先，MinerU 兜底。先运行 `pdf_to_md.py`，如结果乱码/空白再换 MinerU。
+
 ## 重要资源
 
 | 资源 | 路径 |
@@ -259,6 +275,7 @@ project/
 | 图表模板 | `templates/charts/` |
 | **图标库** | `templates/icons/` (640+ 图标) |
 | 设计指南 | `docs/design_guidelines.md` |
+| **图片布局规范** | `docs/image_layout_spec.md` ⚠️ 强制执行 |
 | 画布格式 | `docs/canvas_formats.md` |
 | 图片嵌入 | `docs/svg_image_embedding.md` |
 | 工作流教程 | `docs/workflow_tutorial.md` |
@@ -297,7 +314,7 @@ project/
 - 通用风格与咨询风格在规范格式上有本质区别
 - 图标使用方式需在初次沟通中确认（Emoji / AI生成 / 内置库 / 自定义）
 - 图片使用方式需在初次沟通中确认（不使用 / 用户提供 / AI生成 / 占位符）
-- **图片生成流程**：如果选择「C) AI 生成」，**必须**先切换到 Image_Generator 角色，阅读角色定义，完成图片生成后再进入 Executor 阶段
+- **图片生成流程**：如果图片方式**包含**「C) AI 生成」（如 C、B+C、C+D），**必须**先切换到 Image_Generator 角色，阅读角色定义，完成图片生成后再进入 Executor 阶段
 
 ### 后处理提示
 

@@ -167,7 +167,7 @@ PPT Master 是一个创新的 AI 辅助视觉内容创作系统，通过多角�
     ↓
 [Strategist] 策略师 - 内容规划与设计规范
     │
-    ├─ 图片方式 = "AI 生成"?
+    ├─ 图片方式包含「AI 生成」?
     │       │
     │       YES → [Image_Generator] 图片生成师 - AI 图片生成 → 图片归集到 images/
     │       │
@@ -199,13 +199,15 @@ graph TD
     classDef external fill:#eee,stroke:#999,stroke-width:1px,stroke-dasharray: 5 5;
 
     %% 流程入口
-    RawDoc([原始参考资料 PDF/Word]) --> Mineru
+    RawDoc([原始参考资料 PDF/Word]) --> PDFConvert{PDF 类型?}
 
     %% 准备阶段
     subgraph Preparation [准备阶段 Resources Prep]
-        Mineru[Mineru 智能转换工具]:::tool
+        PDFConvert -- 原生 PDF --> PyMuPDF[pdf_to_md.py 本地转换]:::tool
+        PDFConvert -- 扫描版/复杂排版 --> Mineru[MinerU 云端 AI 转换]:::tool
         
-        Mineru -- 提取文本与结构 --> MD([基础 Markdown 文档]):::artifact
+        PyMuPDF -- 提取文本与结构 --> MD([基础 Markdown 文档]):::artifact
+        Mineru -- 提取文本与结构 --> MD
         
         %% 图片处理流程
         subgraph ImageFlow [图片资源]
@@ -238,7 +240,7 @@ graph TD
         Strategist --> SpecDoc([设计规范与内容大纲]):::artifact
     end
 
-    SpecDoc --> CheckImage{图片方式 = AI 生成?}
+    SpecDoc --> CheckImage{图片方式包含 AI 生成?}
 
     %% 图片生成阶段（条件触发）
     subgraph ImageGen [图片生成阶段 - 条件触发]
@@ -315,12 +317,12 @@ graph TD
 
 ### 2️⃣ Image_Generator (图片生成师) - 条件触发
 
-**职责**: AI 图片生成（当用户选择「AI 生成」图片方式时触发）  
+**职责**: AI 图片生成（当用户选择的图片方式包含「AI 生成」时触发）  
 **输出**: 生成的图片文件，归集到 `images/` 目录
 
 **核心能力**:
 
-- **触发条件**: 仅当 Strategist 阶段用户选择图片方式为「C) AI 生成」时激活
+- **触发条件**: 当 Strategist 阶段用户选择的图片方式**包含**「C) AI 生成」时激活（如 C、B+C、C+D）
 - **提示词优化**: 为每张待生成图片创建优化的 AI 图片生成提示词
 - **图片生成**: 使用 AI 图片生成工具（如 Gemini、Banana 等）生成图片
 - **资源归集**: 将生成的图片保存到项目的 `images/` 目录
@@ -426,11 +428,11 @@ graph TD
    
    | 步骤 | 说明 |
    |------|------|
-   | 📄 **文档转换** | 使用 [MinerU](https://github.com/opendatalab/MinerU) 将 PDF/Word 转换为 Markdown。MinerU 是一个开源的智能文档转换工具，可保留文档结构、提取表格和公式 |
+   | 📄 **文档转换** | **优先使用** `python3 tools/pdf_to_md.py <PDF文件>` 进行本地转换（快速、免费、隐私安全）。如遇扫描版 PDF、复杂多栏排版或数学公式，改用 [MinerU](https://github.com/opendatalab/MinerU) 云端 AI 转换 |
    | 🖼️ **图片资源** | 将必须包含的图片存入项目的 `images/` 文件夹，并在 Markdown 中添加图片描述说明 |
    | 🔣 **图标资源** | 如需自定义图标，可从 [SVG Repo](https://www.svgrepo.com/) 下载，或使用项目内置的 640+ 图标库（`templates/icons/`） |
    
-   > 💡 **提示**：MinerU 支持 CPU/GPU 环境，兼容 Windows/Linux/Mac，可自动识别公式并转换为 LaTeX
+   > 💡 **PDF 转换策略**: PyMuPDF 优先（本地秒级），MinerU 兜底（云端 AI）。详见 [工具使用指南](./tools/README.md)
 
 2. **初始沟通（八项确认）**
    与 Strategist 进行范围确认，Strategist 会对以下八项给出专业建议：
@@ -778,7 +780,7 @@ A:
 <details>
 <summary><b>Q: Image_Generator 什么时候使用？</b></summary>
 
-A: Image_Generator 仅在 Strategist 的八项确认中选择图片方式为「C) AI 生成」时触发。它会在 Executor 阶段之前生成优化的图片提示词和图片，然后 Executor 可以直接引用生成的图片。
+A: Image_Generator 在 Strategist 的八项确认中，当图片方式**包含**「C) AI 生成」时触发（如 C、B+C、C+D 等组合）。它会在 Executor 阶段之前生成优化的图片提示词和图片，然后 Executor 可以直接引用生成的图片。
 
 </details>
 
