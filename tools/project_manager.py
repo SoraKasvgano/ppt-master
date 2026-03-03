@@ -10,19 +10,16 @@ PPT Master - 项目管理工具
     python3 tools/project_manager.py info <project_path>
 """
 
-import os
 import sys
-import json
-import re
 from pathlib import Path
-from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
 # 导入公共工具模块（必须成功）
 try:
     from project_utils import (
         CANVAS_FORMATS,
-        get_project_info,
+        normalize_canvas_format,
+        get_project_info as get_project_info_common,
         validate_project_structure,
         validate_svg_viewbox
     )
@@ -37,7 +34,8 @@ except ImportError:
     try:
         from project_utils import (
             CANVAS_FORMATS,
-            get_project_info,
+            normalize_canvas_format,
+            get_project_info as get_project_info_common,
             validate_project_structure,
             validate_svg_viewbox
         )
@@ -63,13 +61,12 @@ class ProjectManager:
         self.base_dir = Path(base_dir)
 
     def init_project(self, project_name: str, canvas_format: str = 'ppt169',
-                     design_style: str = '通用灵活', base_dir: Optional[str] = None) -> str:
+                     base_dir: Optional[str] = None) -> str:
         """初始化新项目
 
         Args:
             project_name: 项目名称
             canvas_format: 画布格式 (ppt169, ppt43, wechat, 等)
-            design_style: 设计风格 (通用灵活, 一般咨询, 顶级咨询)
             base_dir: 项目基础目录，默认使用实例的 base_dir
 
         Returns:
@@ -80,9 +77,18 @@ class ProjectManager:
         else:
             base_path = self.base_dir
 
+        normalized_format = normalize_canvas_format(canvas_format)
+        if normalized_format not in self.CANVAS_FORMATS:
+            available = ', '.join(sorted(self.CANVAS_FORMATS.keys()))
+            raise ValueError(
+                f"不支持的画布格式: {canvas_format} "
+                f"(可用: {available}; 常用别名: xhs -> xiaohongshu)"
+            )
+
         # 创建项目目录名: {project_name}_{format}_{YYYYMMDD}
+        from datetime import datetime
         date_str = datetime.now().strftime('%Y%m%d')
-        project_dir_name = f"{project_name}_{canvas_format}_{date_str}"
+        project_dir_name = f"{project_name}_{normalized_format}_{date_str}"
         project_path = base_path / project_dir_name
 
         if project_path.exists():
@@ -90,138 +96,34 @@ class ProjectManager:
 
         # 创建目录结构
         project_path.mkdir(parents=True, exist_ok=True)
-        (project_path / 'svg_output').mkdir(exist_ok=True)
-        (project_path / 'images').mkdir(exist_ok=True)
+        (project_path / 'svg_output').mkdir(exist_ok=True)   # 原始版本（带占位符）
+        (project_path / 'svg_final').mkdir(exist_ok=True)    # 最终版本（后处理完成）
+        (project_path / 'images').mkdir(exist_ok=True)       # 图片资源
+        (project_path / 'notes').mkdir(exist_ok=True)        # 演讲备注
+        (project_path / 'templates').mkdir(exist_ok=True)    # 项目页面模板（可选）
+        readme_path = project_path / 'README.md'
+        readme_path.write_text(
+            (
+                f"# {project_name}\n\n"
+                f"- 画布格式: {normalized_format}\n"
+                f"- 创建日期: {date_str}\n\n"
+                "## 目录\n\n"
+                "- `svg_output/`: 原始 SVG 输出\n"
+                "- `svg_final/`: 后处理后的 SVG\n"
+                "- `images/`: 图片资源\n"
+                "- `notes/`: 演讲备注\n"
+                "- `templates/`: 项目模板\n"
+            ),
+            encoding='utf-8'
+        )
 
         # 获取画布格式信息
-        canvas_info = self.CANVAS_FORMATS.get(
-            canvas_format, self.CANVAS_FORMATS['ppt169'])
+        canvas_info = self.CANVAS_FORMATS[normalized_format]
 
-        # 创建设计规范与内容大纲
-        spec_content = f"""# {project_name} - 设计规范与内容大纲
-
-## [INFO] 项目信息
-
-| 项目 | 内容 |
-|------|------|
-| **项目名称** | {project_name} |
-| **画布格式** | {canvas_info['name']} ({canvas_info['dimensions']}) |
-| **页数** | [待定] |
-| **设计风格** | {design_style} |
-| **目标受众** | [待填写] |
-| **使用场景** | [待填写] |
-| **创建日期** | {datetime.now().strftime('%Y-%m-%d')} |
-
----
-
-## [DESIGN] 设计规范
-
-### 1. 画布设置
-
-- **尺寸**: {canvas_info['dimensions']}
-- **viewBox**: `{canvas_info['viewbox']}`
-- **安全边距**: 60px（四边）
-- **内容区域**: [根据画布计算]
-
-### 2. 配色方案
-
-| 用途 | 色值 | 说明 |
-|------|------|------|
-| 背景色 | `#FFFFFF` | 页面主背景 |
-| 卡片背景 | `#F8FAFC` | 次级容器 |
-| 边框色 | `#E5E7EB` | 分隔线、边框 |
-| 主强调色 | `#[待定]` | 标题、重点强调 |
-| 次强调色 | `#[待定]` | 次要强调、图标 |
-| 成功色 | `#10B981` | 正向指标 |
-| 警示色 | `#EF4444` | 问题标注 |
-| 主文字 | `#1F2937` | 标题、重要文字 |
-| 次文字 | `#6B7280` | 正文、说明 |
-| 弱文字 | `#9CA3AF` | 辅助信息、页脚 |
-
-### 3. 字体规范
-
-| 层级 | 字号 | 字重 | 颜色 | 用途 |
-|------|------|------|------|------|
-| H1 | 36px | Bold | `#1F2937` | 页面主标题 |
-| H2 | 24px | SemiBold | `#1F2937` | 章节标题 |
-| H3 | 20px | SemiBold | `#1F2937` | 卡片标题 |
-| Body | 16px | Regular | `#6B7280` | 正文内容 |
-| Small | 14px | Regular | `#9CA3AF` | 说明文字、页脚 |
-
-**字体栈**: `"PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif`
-
-### 4. 布局规范
-
-- **卡片间距**: 24px
-- **卡片圆角**: 12px
-- **卡片内边距**: 24px
-- **元素间距**: 16px（同组）、32px（跨组）
-
-### 5. 技术约束
-
-- [OK] 使用 `<tspan>` 进行手动换行
-- [NO] 禁止使用 `<foreignObject>`
-- [OK] 背景使用 `<rect>` 元素
-- [OK] 遵循 CRAP 设计原则（对齐、对比、重复、亲密性）
-
----
-
-## [CONTENT] 内容大纲
-
-### Slide 01 - 封面
-**核心信息**: [主题]
-
-- 主标题
-- 副标题
-- 日期/作者信息
-
----
-
-### Slide 02 - [页面名称]
-**核心信息**: [一句话概括]
-
-- [内容要点1]
-- [内容要点2]
-- [内容要点3]
-
----
-
-[继续添加更多页面...]
-
----
-
-## [RESOURCE] 图片资源清单（如需要）
-
-| 文件名 | 尺寸 | 用途 | 使用页面 | 状态 |
-|--------|------|------|----------|------|
-| cover_bg.png | {canvas_info['dimensions']} | 封面背景 | Slide 01 | [待生成] |
-
----
-
-## [CHECK] 设计检查清单
-
-### 生成前
-- [ ] 内容符合页面容量
-- [ ] 布局模式选择正确
-- [ ] 颜色使用符合语义
-
-### 生成后
-- [ ] viewBox = `{canvas_info['viewbox']}`
-- [ ] 无 `<foreignObject>` 元素
-- [ ] 所有文本可读（≥14px）
-- [ ] 内容在安全区域内
-- [ ] 所有元素对齐到网格
-- [ ] 相同元素保持一致样式
-- [ ] 颜色符合规范
-
----
-
-*最后更新: {datetime.now().strftime('%Y-%m-%d')}*
-"""
-
-        with open(project_path / '设计规范与内容大纲.md', 'w', encoding='utf-8') as f:
-            f.write(spec_content)
-
+        # 提示用户下一步操作 (不再自动创建空的设计规范文件)
+        print(f"项目目录已创建: {project_path}")
+        print(f"画布格式: {canvas_info['name']} ({canvas_info['dimensions']})")
+        
         return str(project_path)
 
     def validate_project(self, project_path: str) -> Tuple[bool, List[str], List[str]]:
@@ -233,77 +135,19 @@ class ProjectManager:
         Returns:
             (是否有效, 错误列表, 警告列表)
         """
-        project_path = Path(project_path)
-        errors = []
-        warnings = []
+        project_path_obj = Path(project_path)
+        is_valid, errors, warnings = validate_project_structure(str(project_path_obj))
 
-        # 检查目录是否存在
-        if not project_path.exists():
-            errors.append(f"项目目录不存在: {project_path}")
-            return False, errors, warnings
+        if project_path_obj.exists() and project_path_obj.is_dir():
+            info = get_project_info_common(str(project_path_obj))
+            if info.get('svg_files'):
+                svg_files = [project_path_obj / 'svg_output' / f for f in info['svg_files']]
+                expected_format = info.get('format')
+                if expected_format == 'unknown':
+                    expected_format = None
+                warnings.extend(validate_svg_viewbox(svg_files, expected_format))
 
-        if not project_path.is_dir():
-            errors.append(f"不是有效的目录: {project_path}")
-            return False, errors, warnings
-
-        # 检查设计规范文件（核心必需文件）
-        spec_files = ['设计规范与内容大纲.md', 'design_specification.md', '设计规范.md']
-        has_spec = any((project_path / f).exists() for f in spec_files)
-        if not has_spec:
-            errors.append("缺少设计规范文件（建议文件名: 设计规范与内容大纲.md）")
-
-        # 检查 svg_output 目录
-        svg_output = project_path / 'svg_output'
-        if not svg_output.exists():
-            errors.append("缺少 svg_output 目录")
-        else:
-            # 检查 SVG 文件
-            svg_files = list(svg_output.glob('*.svg'))
-            if len(svg_files) == 0:
-                warnings.append("svg_output 目录为空")
-            else:
-                # 验证 SVG 文件命名
-                for svg_file in svg_files:
-                    if not re.match(r'^slide_\d+_\w+\.svg$', svg_file.name):
-                        warnings.append(
-                            f"SVG 文件命名不规范: {svg_file.name} (建议: slide_XX_name.svg)")
-
-                # 检查 viewBox
-                self._validate_svg_viewbox(svg_files, warnings)
-
-        # 检查项目命名格式
-        dir_name = project_path.name
-        if not re.match(r'^.+_(ppt169|ppt43|wechat|xiaohongshu|story|moments|banner|a4)_\d{8}$', dir_name, re.IGNORECASE):
-            warnings.append(
-                f"项目目录命名不规范: {dir_name} (建议: name_format_YYYYMMDD)")
-
-        is_valid = len(errors) == 0
         return is_valid, errors, warnings
-
-    def _validate_svg_viewbox(self, svg_files: List[Path], warnings: List[str]):
-        """验证 SVG 文件的 viewBox 设置
-
-        Args:
-            svg_files: SVG 文件列表
-            warnings: 警告列表（会被修改）
-        """
-        viewbox_pattern = re.compile(r'viewBox="([^"]+)"')
-        viewboxes = set()
-
-        for svg_file in svg_files[:5]:  # 只检查前5个文件
-            try:
-                with open(svg_file, 'r', encoding='utf-8') as f:
-                    content = f.read(1000)  # 只读取前1000字符
-                    match = viewbox_pattern.search(content)
-                    if match:
-                        viewboxes.add(match.group(1))
-                    else:
-                        warnings.append(f"{svg_file.name}: 未找到 viewBox 属性")
-            except Exception as e:
-                warnings.append(f"{svg_file.name}: 读取失败 - {e}")
-
-        if len(viewboxes) > 1:
-            warnings.append(f"检测到多个不同的 viewBox 设置: {viewboxes}")
 
     def get_project_info(self, project_path: str) -> Dict:
         """获取项目信息
@@ -314,49 +158,16 @@ class ProjectManager:
         Returns:
             项目信息字典
         """
-        project_path = Path(project_path)
-        info = {
-            'name': project_path.name,
-            'path': str(project_path),
-            'exists': project_path.exists(),
-            'svg_count': 0,
-            'has_spec': False,
-            'canvas_format': 'unknown',
-            'create_date': 'unknown'
+        shared = get_project_info_common(project_path)
+        return {
+            'name': shared.get('name', Path(project_path).name),
+            'path': shared.get('path', str(project_path)),
+            'exists': shared.get('exists', False),
+            'svg_count': shared.get('svg_count', 0),
+            'has_spec': shared.get('has_spec', False),
+            'canvas_format': shared.get('format_name', '未知格式'),
+            'create_date': shared.get('date_formatted', '未知日期')
         }
-
-        if not project_path.exists():
-            return info
-
-        # 统计 SVG 文件
-        svg_output = project_path / 'svg_output'
-        if svg_output.exists():
-            info['svg_count'] = len(list(svg_output.glob('*.svg')))
-
-        # 检查设计规范
-        spec_files = ['设计规范与内容大纲.md', 'design_specification.md', '设计规范.md']
-        info['has_spec'] = any((project_path / f).exists() for f in spec_files)
-
-        # 从目录名提取信息
-        dir_name = project_path.name
-
-        # 提取画布格式
-        for fmt in self.CANVAS_FORMATS.keys():
-            if fmt in dir_name.lower():
-                info['canvas_format'] = self.CANVAS_FORMATS[fmt]['name']
-                break
-
-        # 提取日期
-        date_match = re.search(r'_(\d{8})$', dir_name)
-        if date_match:
-            date_str = date_match.group(1)
-            try:
-                date_obj = datetime.strptime(date_str, '%Y%m%d')
-                info['create_date'] = date_obj.strftime('%Y-%m-%d')
-            except ValueError:
-                pass
-
-        return info
 
 
 def main():
@@ -396,7 +207,7 @@ def main():
                 project_name, canvas_format, base_dir=base_dir)
             print(f"[OK] 项目已创建: {project_path}")
             print("\n下一步:")
-            print("1. 编辑 设计规范与内容大纲.md")
+            print("1. 生成并保存 设计规范与内容大纲.md (请参考 templates/design_spec_reference.md)")
             print("2. 将 SVG 文件放入 svg_output/ 目录")
         except Exception as e:
             print(f"[ERROR] 创建失败: {e}")

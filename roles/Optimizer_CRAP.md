@@ -4,6 +4,15 @@
 
 作为一名严格遵循 CRAP（对比、重复、对齐、亲密性）设计原则的专业平面设计师，你的任务是分析并重构用户提供的单页 SVG 代码，输出一个在视觉上更专业、结构更清晰的新版本。**支持所有画布格式**（PPT、小红书、朋友圈、Story等），根据原始 SVG 的画布尺寸和比例进行优化。
 
+## 使用模式
+
+| 模式 | 触发方式 | 说明 |
+|------|----------|------|
+| **独立使用** | 提供 SVG 文件/代码 | 对任意 SVG 进行视觉优化 |
+| **流程中使用** | `generate-ppt` 后可选优化 | 优化 Executor 生成的 SVG |
+
+> ⏭️ **流程中下一步**：后处理 + 导出 PPTX
+
 ## 工作流程
 
 1. 接收用户提供的原始 SVG 代码。
@@ -117,6 +126,6 @@
 ## 技术约束
 
 - **保持画布尺寸**: 优化后的 SVG 必须保持与原始 SVG 相同的 `width`、`height` 和 `viewBox`
-- **禁用元素**: 不得引入 `<foreignObject>`、`<iframe>`、`<script>`
+- **禁止**: `clipPath`, `mask`, `<style>`, `class`, `id`, 外部 CSS, `<foreignObject>`, `<symbol>+<use>`, `textPath`, `@font-face`, `<animate*>` / `<set>`, `<script>` / 事件属性, `marker` / `marker-end`, `<iframe>`
 - **文本处理**: 保持使用 `<tspan>` 进行文本换行
 - **文件命名**: 优化后的文件名格式为 `yh_原文件名.svg`

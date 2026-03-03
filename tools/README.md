@@ -2,6 +2,100 @@
 
 本目录包含用于项目管理、验证和文件处理的实用工具。
 
+## 工具架构总览
+
+```mermaid
+graph TB
+    subgraph Input["📥 输入转换"]
+        A1[pdf_to_md.py]
+        A2[web_to_md.py / .cjs]
+    end
+    
+    subgraph Project["📁 项目管理"]
+        B1[project_manager.py]
+        B2[project_utils.py]
+        B1 --> B2
+    end
+    
+    subgraph Finalize["⚙️ 后处理 (finalize_svg.py)"]
+        direction TB
+        C0[finalize_svg.py<br/>统一入口]
+        C1[embed_icons.py]
+        C2[crop_images.py]
+        C3[fix_image_aspect.py]
+        C4[embed_images.py]
+        C5[flatten_tspan.py]
+        C6[svg_rect_to_path.py]
+        
+        C0 --> C1
+        C0 --> C2
+        C0 --> C3
+        C0 --> C4
+        C0 --> C5
+        C0 --> C6
+    end
+    
+    subgraph Export["📤 导出"]
+        D1[svg_to_pptx.py]
+    end
+    
+    subgraph Quality["🔍 质量检查"]
+        E1[svg_quality_checker.py]
+        E2[batch_validate.py]
+    end
+    
+    subgraph Utils["🛠️ 辅助工具"]
+        F1[rotate_images.py]
+        F2[analyze_images.py]
+        F3[svg_position_calculator.py]
+        F4[config.py]
+        F5[nano_banana_gen.py]
+    end
+    
+    A1 --> B1
+    A2 --> B1
+    B1 -->|svg_output/| C0
+    C0 -->|svg_final/| D1
+    D1 -->|.pptx| Output[📊 PowerPoint]
+```
+
+### 核心工作流
+
+```
+源文档 → [pdf_to_md / web_to_md] → Markdown
+                    ↓
+              [project_manager init]
+                    ↓
+              AI 生成 SVG → svg_output/
+                    ↓
+              [finalize_svg] ← 聚合 6 个子工具
+                    ↓
+              svg_final/
+                    ↓
+              [svg_to_pptx] → output.pptx
+```
+
+### 工具分类快速索引
+
+| 分类 | 工具 | 说明 |
+|------|------|------|
+| **输入转换** | `pdf_to_md.py`, `web_to_md.py/.cjs` | 将 PDF/网页转为 Markdown |
+| **项目管理** | `project_manager.py` | 创建、验证项目 |
+| **后处理** | `finalize_svg.py` ⭐ | 统一入口，调用下方 6 个工具 |
+| ↳ 子工具 | `embed_icons.py` | 嵌入图标占位符 |
+| ↳ 子工具 | `crop_images.py` | 智能裁剪图片 |
+| ↳ 子工具 | `fix_image_aspect.py` | 修复图片宽高比 |
+| ↳ 子工具 | `embed_images.py` | Base64 嵌入图片 |
+| ↳ 子工具 | `flatten_tspan.py` | 文本扁平化 |
+| ↳ 子工具 | `svg_rect_to_path.py` | 圆角矩形转 Path |
+| **导出** | `svg_to_pptx.py` | SVG 转 PowerPoint |
+| **讲稿处理** | `total_md_split.py` | 讲稿拆分工具 |
+| **质量检查** | `svg_quality_checker.py`, `batch_validate.py` | 验证 SVG 规范 |
+| **素材生成** | `nano_banana_gen.py` | 利用 Gemini Nano 生成高品质图片 |
+| **辅助** | `config.py`, `analyze_images.py`, `rotate_images.py` | 配置和图片处理 |
+
+---
+
 ## 工具列表
 
 ### 0. pdf_to_md.py — PDF 转 Markdown 工具（推荐首选）
@@ -239,7 +333,7 @@ python3 tools/project_manager.py info projects/my_presentation_ppt169_20251116
 
 将含有多行 `<tspan>` 的 `<text>` 结构扁平化为多条独立的 `<text>` 元素，便于部分渲染器兼容或文本抽取。
 
-**注意**: 生成端仍应使用 `<tspan>` 手动换行（禁止 `<foreignObject>`）。此工具仅用于后处理。
+**注意**: 生成端仍应使用 `<tspan>` 手动换行（禁用项详见 `AGENTS.md`）。此工具仅用于后处理。
 
 **用法**:
 
@@ -370,7 +464,7 @@ python3 tools/error_helper.py missing_readme project_path=my_project
 - `missing_spec` - 缺少设计规范
 - `missing_svg_output` - 缺少 svg_output 目录
 - `viewbox_mismatch` - viewBox 不匹配
-- `foreignobject_detected` - 检测到禁用元素
+- `foreignobject_detected` - 检测到禁用元素（详见 AGENTS.md 黑名单）
 - 等等...
 
 ---
@@ -382,17 +476,16 @@ python3 tools/error_helper.py missing_readme project_path=my_project
 **功能**:
 
 - 验证 viewBox 属性
-- 检测禁用元素（foreignObject）
+- 检测禁用元素（详见 AGENTS.md）
 - 检查字体使用
 - 验证 width/height 与 viewBox 一致性
 - 检查文本换行方式
-- 分析文件大小
 
 **用法**:
 
 ```bash
 # 检查单个文件
-python3 tools/svg_quality_checker.py examples/project/svg_output/slide_01.svg
+python3 tools/svg_quality_checker.py examples/project/svg_output/01_cover.svg
 
 # 检查整个目录
 python3 tools/svg_quality_checker.py examples/project/svg_output
@@ -413,11 +506,10 @@ python3 tools/svg_quality_checker.py examples/project --export
 **检查项目**:
 
 - ✅ viewBox 属性存在且格式正确
-- ✅ 无 `<foreignObject>` 元素
+- ✅ 无禁用元素（详见 AGENTS.md）
 - ✅ 使用《设计规范》指定的字体
 - ✅ width/height 与 viewBox 一致
 - ✅ 文本使用 `<tspan>` 换行
-- ✅ 文件大小合理（< 500KB）
 
 ---
 
@@ -431,7 +523,7 @@ python3 tools/svg_quality_checker.py examples/project --export
 | `<g opacity="0.2">...</g>` | 每个子元素单独设置透明度 |
 | `<image opacity="0.3"/>` | 图片后加遮罩层 `<rect fill="背景色" opacity="0.7"/>` |
 
-> 📌 **记忆口诀**：PPT 不认 rgba、不认组透明、不认图片透明
+> 📌 **记忆口诀**：PPT 不认 rgba、不认组透明、不认图片透明、不认 marker
 
 ---
 
@@ -447,12 +539,16 @@ python3 tools/svg_quality_checker.py examples/project --export
 - 支持使用 svg_output 或 svg_final 目录
 - SVG 在 PowerPoint 中保持可编辑
 - **支持页面切换动画和入场动画**
+- **自动嵌入演讲备注**（从 notes/ 目录读取）
 
 **用法**:
 
 ```bash
-# 推荐：使用后处理完成的版本
+# 推荐：使用后处理完成的版本（默认嵌入备注）
 python3 tools/svg_to_pptx.py <项目路径> -s final
+
+# 禁用演讲备注
+python3 tools/svg_to_pptx.py <项目路径> -s final --no-notes
 
 # 使用原始版本
 python3 tools/svg_to_pptx.py <项目路径>
@@ -466,6 +562,19 @@ python3 tools/svg_to_pptx.py <项目路径> -t fade --transition-duration 1.0
 # 静默模式
 python3 tools/svg_to_pptx.py <项目路径> -s final -q
 ```
+
+**演讲备注**:
+
+工具自动读取 `notes/` 目录中的 Markdown 备注文件，并嵌入到 PPTX 的演讲者备注中。
+
+**文件命名支持两种方式**：
+- **推荐**：与 SVG 同名（如 `01_封面.svg` 对应 `notes/01_封面.md`）
+- **兼容**：`slide01.md` 格式（向后兼容）
+
+| 参数 | 说明 |
+|------|------|
+| 默认 | 自动嵌入备注（无备注文件则留空） |
+| `--no-notes` | 禁用备注嵌入 |
 
 **切换效果参数**:
 
@@ -518,10 +627,98 @@ pip install python-pptx
 - 需要 PowerPoint 2016+ 才能正确显示
 - 文件体积比 PNG 方案小很多
 - 切换效果默认关闭，需要用户显式启用
+- 演讲备注默认开启，使用 `--no-notes` 禁用
 
 ---
 
-### 9. svg_position_calculator.py — SVG 位置计算与验证工具
+### 9. total_md_split.py — 讲稿拆分工具
+
+将 `total.md` 讲稿文件拆分为多个独立的讲稿文件，每个文件对应一个 SVG 页面。
+
+**功能**:
+
+- 读取 `total.md` 文件，解析其中的一级标题和讲稿内容
+- 检查 `svg_output` 文件夹中的 SVG 文件是否都有对应的讲稿
+- 如果存在 SVG 没有对应的讲稿，会输出错误提示要求重新生成讲稿文件
+- 如果全部匹配，根据名称对文档进行拆分，分成多个文档
+- 拆分后的文档命名与 SVG 文件同名，后缀改为 `.md`
+- 拆分后的文档**不包含**一级标题
+
+**用法**:
+
+```bash
+# 基本用法
+python3 tools/total_md_split.py <项目路径>
+
+# 指定输出目录
+python3 tools/total_md_split.py <项目路径> -o <输出目录>
+
+# 静默模式
+python3 tools/total_md_split.py <项目路径> -q
+```
+
+**示例**:
+
+```bash
+# 基本用法
+python3 tools/total_md_split.py projects/<svg 标题>_ppt169_YYYYMMDD
+
+# 指定输出目录
+python3 tools/total_md_split.py projects/<svg 标题>_ppt169_YYYYMMDD -o notes
+
+# 静默模式
+python3 tools/total_md_split.py projects/<svg 标题>_ppt169_YYYYMMDD -q
+```
+
+**讲稿格式要求**:
+
+`total.md` 文件需要使用以下格式：
+
+```markdown
+# 01_<页面标题>
+
+讲稿内容...
+
+---
+
+# 02_<页面标题>
+
+讲稿内容...
+
+---
+
+# 03_<页面名称>
+
+讲稿内容...
+```
+
+- 每个章节以 `# ` 开头的一级标题开始（**严格要求**）
+- 标题文本需与对应 SVG 文件名一致（**严格要求**）
+- 章节之间必须用 `---` 分隔（**严格要求**）
+- 讲稿内容在标题之后，直到下一个标题或文件结束
+
+**容错说明（工具侧）**：
+即便未完全符合上述格式，`total_md_split.py` 仍会尝试根据标题/页码/名称相似度进行拆分，但结果不保证正确。请以严格格式为准。
+
+**错误处理**:
+
+如果存在 SVG 文件没有对应的讲稿，工具会输出错误信息：
+
+```
+错误: SVG 文件与讲稿不匹配
+  缺失的讲稿: <N>_<页面标题>
+
+请重新生成讲稿文件，确保每个 SVG 都有对应的讲稿。
+```
+
+**依赖**:
+
+- Python 3.6+
+- 无外部依赖（仅使用标准库）
+
+---
+
+### 10. svg_position_calculator.py — SVG 位置计算与验证工具
 
 图表坐标的**事前计算**和**事后验证**工具，帮助确保 SVG 元素位置准确无误。
 
@@ -825,7 +1022,7 @@ A: 支持 `ppt169`、`ppt43`、`xiaohongshu`、`moments` 等，详见 `project_u
 
 ---
 
-### 10. svg_rect_to_path.py — SVG 圆角矩形转 Path 工具
+### 11. svg_rect_to_path.py — SVG 圆角矩形转 Path 工具
 
 解决 SVG 在 PowerPoint 中「转换为形状」时圆角丢失的问题。
 
@@ -875,7 +1072,7 @@ python3 tools/svg_rect_to_path.py examples/ppt169_demo/svg_output/01_cover.svg
 
 ---
 
-### 11. fix_image_aspect.py — SVG 图片宽高比修复工具
+### 12. fix_image_aspect.py — SVG 图片宽高比修复工具
 
 解决 SVG 中 `<image>` 元素在 PowerPoint「转换为形状」时图片拉伸变形的问题。
 
@@ -893,7 +1090,7 @@ python3 tools/svg_rect_to_path.py examples/ppt169_demo/svg_output/01_cover.svg
 python3 tools/fix_image_aspect.py path/to/slide.svg
 
 # 处理多个文件
-python3 tools/fix_image_aspect.py slide_01.svg slide_02.svg slide_03.svg
+python3 tools/fix_image_aspect.py 01_cover.svg 02_toc.svg 03_content.svg
 
 # 预览模式（不修改文件）
 python3 tools/fix_image_aspect.py --dry-run path/to/slide.svg
@@ -920,7 +1117,7 @@ pip install Pillow  # 用于读取图片尺寸（推荐安装）
 
 ---
 
-### 12. gemini_watermark_remover.py — Gemini 水印去除工具
+### 13. gemini_watermark_remover.py — Gemini 水印去除工具
 
 去除 Gemini 生成图片右下角的水印 Logo。使用逆向混合算法还原原始像素。
 
@@ -974,7 +1171,66 @@ pip install Pillow numpy
 
 ---
 
-### 13. embed_icons.py — SVG 图标嵌入工具
+### 14. nano_banana_gen.py — Nano Banana 图像生成工具
+
+利用 Google GenAI API 调用 Gemini 模型生成高质量图片素材。
+
+**功能**:
+
+- **高分辨率**: 支持最高 4K 分辨率生成
+- **自定义宽高比**: 支持 `16:9`, `4:3`, `1:1`, `9:16` 等主流比例
+- **提示词工程**: 内置负面提示词支持，自动优化生成质量
+- **自动保存**: 自动根据提示词命名并保存为 PNG 格式
+
+**用法**:
+
+```bash
+# 生成默认图片
+python3 tools/nano_banana_gen.py "A modern futuristic workspace"
+
+# 指定宽高比和尺寸
+python3 tools/nano_banana_gen.py "Abstract tech background" --aspect_ratio 16:9 --image_size 4K
+
+# 指定输出目录
+python3 tools/nano_banana_gen.py "Concept car" -o projects/demo/images
+
+# 使用负面提示词
+python3 tools/nano_banana_gen.py "Beautiful landscape" -n "low quality, blurry, watermark"
+```
+
+**参数说明**:
+
+| 参数 | 缩写 | 默认值 | 可选值 |
+|------|------|--------|--------|
+| `prompt` | - | Nano Banana | 提示词字符串 |
+| `--negative_prompt` | `-n` | None | 负面提示词 |
+| `--aspect_ratio` | - | `1:1` | `1:1`, `16:9`, `4:3`, `3:2`, `9:16`, `21:9` 等 |
+| `--image_size` | - | `4K` | `1K`, `2K`, `4K` |
+| `--output` | `-o` | 当前工作目录 | 图片保存目录 |
+
+**环境变量配置**:
+
+使用前需设置环境变量：
+
+```bash
+# 必需：Gemini API Key
+export GEMINI_API_KEY="YOUR_GEMINI_API_KEY"
+
+# 可选：自定义 API 端点（用于代理服务）
+export GEMINI_BASE_URL="YOUR_API_BASE_URL"
+```
+
+> 💡 **提示**: 可将环境变量添加到 `~/.zshrc` 或 `~/.bashrc` 中永久生效。
+
+**依赖**:
+
+```bash
+pip install google-genai
+```
+
+---
+
+### 15. embed_icons.py — SVG 图标嵌入工具
 
 将 SVG 文件中的图标占位符 (`<use ...>`) 替换为实际的图标路径数据，实现图标的“零依赖”嵌入。
 
@@ -1103,7 +1359,8 @@ pip install python-pptx
 
 ---
 
-_最后更新: 2025-12-20_
+_最后更新: 2026-02-03_
+
+_nano_banana_gen.py 文档更新: 2026-02-03_
 
 _gemini_watermark_remover.py 文档更新: 2025-12-20_
-

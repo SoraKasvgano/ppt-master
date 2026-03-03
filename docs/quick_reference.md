@@ -4,14 +4,14 @@
 
 ## 🎯 角色速查
 
-| 角色                    | 何时使用             | 输入     | 输出               |
-| ----------------------- | -------------------- | -------- | ------------------ |
-| **Strategist**          | 项目开始时           | 源文档   | 设计规范与内容大纲 |
-| **Image_Generator**     | 选择 AI 生成图片时   | 图片资源清单 | 图片文件 + 提示词 |
-| **Executor_General**    | 生成通用风格页面     | 设计规范 | SVG 代码           |
-| **Executor_Consultant** | 生成一般咨询风格页面 | 设计规范 | SVG 代码           |
-| **Executor_Consultant_Top** | 生成顶级咨询风格页面（MBB 级） | 设计规范 | SVG 代码 |
-| **Optimizer_CRAP**      | 优化重要页面         | SVG 代码 | 优化后的 SVG       |
+| 角色                        | 何时使用                       | 输入         | 输出               |
+| --------------------------- | ------------------------------ | ------------ | ------------------ |
+| **Strategist**              | 项目开始时                     | 源文档       | 设计规范与内容大纲 |
+| **Image_Generator**         | 选择 AI 生成图片时             | 图片资源清单 | 图片文件 + 提示词  |
+| **Executor_General**        | 生成通用风格页面               | 设计规范     | SVG 代码           |
+| **Executor_Consultant**     | 生成一般咨询风格页面           | 设计规范     | SVG 代码           |
+| **Executor_Consultant_Top** | 生成顶级咨询风格页面（MBB 级） | 设计规范     | SVG 代码           |
+| **Optimizer_CRAP**          | 优化重要页面                   | SVG 代码     | 优化后的 SVG       |
 
 ## 📋 工作流程检查清单
 
@@ -33,36 +33,72 @@
   - [ ] 配色方案（主导色、辅助色、强调色的 HEX 色值）
   - [ ] **图标方式**（A Emoji / B AI生成 / C 内置图标库 / D 自定义路径）
   - [ ] **图片使用**（A 不使用 / B 用户提供 / C AI生成 / D 占位符预留）
-  - [ ] **字体方案**（根据内容特征推荐字体组合：标题/正文/强调）
+  - [ ] 若图片包含「B) 用户提供」，八项确认后立即运行 `python3 tools/analyze_images.py <项目路径>/images`，
+        在输出设计规范前填充图片资源清单
+  - [ ] **排版方案**（字体组合 P1-P5 + 正文字号基准 18-24px）
 - [ ] 等待 Strategist 生成设计规范
 - [ ] 仔细检查并确认设计规范
+- [ ] **创建项目文件夹**：`python3 tools/project_manager.py init <名称> --format <格式>`
 - [ ] 保存设计规范到项目文件夹
 
 💡 **提示**: Strategist 不仅会提问，还会主动提供专业建议供你参考
 
-### ✅ 使用 Executor
+### ✅ 使用 Image_Generator（条件触发）
 
+⚠️ **触发条件**：图片方式包含「C) AI 生成」时必须执行此步骤
+
+- [ ] 阅读设计规范中的图片资源清单
+- [ ] 为每张图片判断类型（背景图/实景照片/插画/图表/装饰）
+- [ ] 创建提示词文档 `images/image_prompts.md`
+- [ ] 为每张待生成图片生成：类型 + 优化提示词 + 负面提示词 + Alt Text
+- [ ] 调用 AI 图像生成工具生成图片
+- [ ] 保存所有图片到 `images/` 目录
+- [ ] 确认所有图片已归集完成，状态从「待生成」变更为「已生成」
+
+💡 **提示**: 图片生成是串行环节，必须完成后才能进入 Executor 阶段
+
+### ✅ 使用 Executor（两阶段）
+
+**视觉构建阶段**：
 - [ ] 明确告知需要生成哪一页
 - [ ] 提供设计规范引用
 - [ ] 检查生成的 SVG 效果
 - [ ] 如需修改，提供具体反馈
 - [ ] 保存 SVG 到项目的 svg_output 文件夹
 
+**逻辑构建阶段**（必须）：
+- [ ] 所有 SVG 页面完成后，生成完整演讲备注文稿 `notes/total.md`
+- [ ] 确保讲稿包含所有页面的过渡语和控场标记
+
 ### ✅ 使用 Optimizer（可选）
 
+- [ ] 仅在**完整初版产出后**仍不满意时使用
 - [ ] 选择需要优化的页面
 - [ ] 提供原始 SVG
 - [ ] 说明优化重点（如果有）
 - [ ] 检查优化后的效果
 - [ ] 保存为 yh\_前缀的文件名
+- [ ] 优化后重新运行 `finalize_svg.py` 与 `svg_to_pptx.py` 以保持产物一致
 
-### ✅ 完成后
+### ✅ 完成后（自动执行）
 
+**后处理和导出步骤由 AI 自动执行：**
+
+- [ ] AI 自动拆分讲稿：`python3 tools/total_md_split.py <项目路径>`
+  - 将 `notes/total.md` 拆分为各页独立文件
+- [ ] AI 自动运行后处理：`python3 tools/finalize_svg.py <项目路径>`
+  - 修正图片路径
+  - 优化代码结构
+  - 生成最终版本到 `svg_final/`
+- [ ] AI 自动导出 PPTX：`python3 tools/svg_to_pptx.py <项目路径> -s final`
+  - 生成可用的 PowerPoint 文件
+  - 自动嵌入演讲备注
+- [ ] 在 PowerPoint 中预览最终效果
 - [ ] 检查所有页面的一致性
-- [ ] 在浏览器中预览所有 SVG
-- [ ] 转换格式（如需要 PNG 或 PDF）
-- [ ] 添加项目 README 文档
-- [ ] 备份重要文件
+- [ ] 添加项目 README 文档（可选）
+- [ ] 备份重要文件（可选）
+
+💡 **提示**: 后处理和导出无需手动执行，AI 会在完成演讲备注后自动完成
 
 ## 🎨 设计风格选择指南
 
@@ -146,9 +182,9 @@
 
 ```
 请根据设计规范生成第[X]页：[页面主题]
-请将SVG保存到：projects/[项目名]_[YYYYMMDD]/svg_output/slide_[页码]_[主题].svg
+请将SVG保存到：projects/[项目名]_[格式]_[YYYYMMDD]/svg_output/[页码]_[主题].svg
 
-例如: projects/company_report_20251012/svg_output/slide_01_cover.svg
+例如: projects/company_report_20251012/svg_output/01_cover.svg
 ```
 
 ### 请求修改
@@ -258,24 +294,26 @@ viewBox: "0 0 1280 720"
 
 ### 字体大小参考
 
-#### 通用灵活风格
+> **字号根据内容密度选择，而非设计风格**
+
+#### 内容宽松（每页要点少，基准 24px）
 
 ```
-H1 页面标题: 48-56px
-H2 章节标题: 32-40px
-H3 小节标题: 24-28px
-正文: 18-20px
-说明文字: 14-16px
+H1 页面标题: 60-72px (2.5-3×)
+H2 章节标题: 42-48px (1.75-2×)
+H3 小节标题: 32-36px (1.3-1.5×)
+正文: 24px (1× 基准)
+说明文字: 18-20px (0.75-0.85×)
 ```
 
-#### 咨询风格
+#### 内容密集（每页信息多，基准 18px）
 
 ```
-封面标题: 48-56px
-页面标题: 32-36px
-章节标题: 24-28px
-正文: 18-20px
-注释: 14-16px
+封面标题: 45-54px (2.5-3×)
+页面标题: 27-36px (1.5-2×)
+章节标题: 22-27px (1.2-1.5×)
+正文: 18px (1× 基准)
+注释: 14-15px (0.75-0.85×)
 ```
 
 ## 🎨 配色速查
@@ -311,16 +349,16 @@ BCG深蓝:     #003F6C
 ### 项目文件夹
 
 ```
-projects/项目英文名_YYYYMMDD/
+projects/项目英文名_格式_YYYYMMDD/
 或
-projects/项目拼音_YYYYMMDD/
+projects/项目拼音_格式_YYYYMMDD/
 
 例如:
-projects/market_analysis_20251012/
-projects/shichang_fenxi_20251012/
+projects/market_analysis_ppt169_20251012/
+projects/shichang_fenxi_ppt169_20251012/
 ```
 
-**重要**: 必须添加日期后缀 `_YYYYMMDD`,例如 `_20251012` 表示 2025年10月12日
+**重要**: 命名格式为 `name_format_YYYYMMDD`，例如 `market_analysis_ppt169_20251012`
 
 ### 源文档
 
@@ -337,22 +375,22 @@ design_specification.md
 ### SVG 文件
 
 ```
-格式: slide_{页码}_{主题}.svg
+格式: {页码}_{主题}.svg
 
 示例:
-slide_01_cover.svg
-slide_02_kpi_dashboard.svg
-slide_03_market_analysis.svg
+01_cover.svg
+02_kpi_dashboard.svg
+03_market_analysis.svg
 ```
 
 ### 优化后的 SVG
 
 ```
-格式: yh_slide_{页码}_{主题}.svg
+格式: yh_{页码}_{主题}.svg
 
 示例:
-yh_slide_01_cover.svg
-yh_slide_02_kpi_dashboard.svg
+yh_01_cover.svg
+yh_02_kpi_dashboard.svg
 ```
 
 ## 🔗 快速链接
@@ -391,20 +429,27 @@ yh_slide_02_kpi_dashboard.svg
 
 为确保导出 PPT 后效果一致，**透明度必须使用标准写法**：
 
-| ❌ 禁止 | ✅ 正确 |
-|--------|--------|
-| `fill="rgba(255,255,255,0.1)"` | `fill="#FFFFFF" fill-opacity="0.1"` |
-| `<g opacity="0.2">...</g>` | 每个子元素单独设置透明度 |
-| `<image opacity="0.3"/>` | 图片后加遮罩层 `<rect fill="背景色" opacity="0.7"/>` |
+| ❌ 禁止                        | ✅ 正确                                              |
+| ------------------------------ | ---------------------------------------------------- |
+| `fill="rgba(255,255,255,0.1)"` | `fill="#FFFFFF" fill-opacity="0.1"`                  |
+| `<g opacity="0.2">...</g>`     | 每个子元素单独设置透明度                             |
+| `<image opacity="0.3"/>`       | 图片后加遮罩层 `<rect fill="背景色" opacity="0.7"/>` |
 
-> 📌 **记忆口诀**：PPT 不认 rgba、不认组透明、不认图片透明
+> 📌 **记忆口诀**：PPT 不认 rgba、不认组透明、不认图片透明、不认 marker
 
 ## 🔧 后处理工具
+
+### 拆分讲稿
+
+```bash
+# 将 notes/total.md 拆分为各页独立文件
+python3 tools/total_md_split.py <项目路径>
+```
 
 ### 最终化处理
 
 ```bash
-# 直接运行，无需参数
+# 修正图片路径、嵌入图标
 python3 tools/finalize_svg.py <项目路径>
 ```
 
